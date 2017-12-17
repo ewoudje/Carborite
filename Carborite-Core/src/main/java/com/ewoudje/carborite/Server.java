@@ -5,6 +5,7 @@ package com.ewoudje.carborite;
 import com.ewoudje.carborite.networking.ConnectionHandler;
 import com.ewoudje.carborite.networking.FramingHandler;
 import com.ewoudje.carborite.networking.LegacyHandler;
+import com.ewoudje.carborite.networking.MinecraftEncryption;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.channel.ChannelFuture;
