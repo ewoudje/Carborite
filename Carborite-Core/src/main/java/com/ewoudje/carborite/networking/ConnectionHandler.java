@@ -2,27 +2,48 @@ package com.ewoudje.carborite.networking;
 
 //Made by ewoudje
 
+import com.ewoudje.carborite.MinecraftEncryption;
 import com.ewoudje.carborite.Properties;
+import com.ewoudje.carborite.Server;
 import io.netty.buffer.ByteBuf;
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.DecoderException;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.security.PrivateKey;
+import java.util.Arrays;
+import java.util.Random;
 import java.util.UUID;
 
 public class ConnectionHandler extends SimpleChannelInboundHandler<ByteBuf> {
 
+    private static Class<? extends PacketPlayIn>[] serverBoundPackages = new Class[] {
+
+    };
+
+    private Channel channel;
     private ProtocolState state = ProtocolState.HANDSHAKE;
     private Properties properties;
     private int protocol;
     private String address;
     private int port;
+    private PrivateKey serverKey;
+    private SecretKey secretKey;
+    private byte[] verify;
+    private String username;
+    private UUID uuid;
 
-    public ConnectionHandler(Properties properties) {
+    public ConnectionHandler(Properties properties, Channel channel) {
         this.properties = properties;
+        this.channel = channel;
+        Random random = new Random();
+        verify = new byte[5];
+        random.nextBytes(verify);
     }
 
     @Override
@@ -42,15 +63,7 @@ public class ConnectionHandler extends SimpleChannelInboundHandler<ByteBuf> {
         final PacketDataSerializer msg = new PacketDataSerializer(buf);
         final int id = msg.readVarInt();
         if (state == ProtocolState.PLAY) {
-            switch (id) {
-                case 0x00:
 
-                    break;
-                default:
-                    ctx.channel().close();
-                    throw new DecoderException("Unknown play message type: " + id);
-
-            }
         } else if (state == ProtocolState.HANDSHAKE) {
             switch (id) {
                 case 0x00:
@@ -64,7 +77,7 @@ public class ConnectionHandler extends SimpleChannelInboundHandler<ByteBuf> {
         } else if (state == ProtocolState.STATUS) {
             switch (id) {
                 case 0x00:
-                    status(ctx);
+                    sendStatus(ctx);
                     break;
                 case 0x01:
                     PacketDataSerializer serializer1 = new PacketDataSerializer(ctx.alloc().buffer());
@@ -80,14 +93,25 @@ public class ConnectionHandler extends SimpleChannelInboundHandler<ByteBuf> {
         } else if (state == ProtocolState.LOGIN) {
             switch (id) {
                 case 0x00:
-                    PacketDataSerializer serializer1 = new PacketDataSerializer(ctx.alloc().buffer());
-                    serializer1.writeVarInt(0x00);
-                    serializer1.writeString("Not ready yet");
-                    ctx.writeAndFlush(serializer1);
-                    ctx.channel().close();
+                    username = msg.readString(16);
+                    sendEncryptRequest(ctx);
                     break;
                 case 0x01:
-
+                    PrivateKey privateKey = Server.getKeyPair().getPrivate();
+                    byte[] sharedSecret = msg.a();
+                    secretKey = MinecraftEncryption.getSecretKey(privateKey, sharedSecret);
+                    byte[] verify = msg.a();
+                    verify = MinecraftEncryption.b(privateKey, verify);
+                    if (!Arrays.equals(verify, this.verify)) {
+                        System.out.println("Wrong verify key, retrying...");
+                        sendEncryptRequest(ctx);
+                    }
+                    encrypt();
+                    PacketDataSerializer serializer = new PacketDataSerializer(ctx.alloc().buffer());
+                    uuid = UUID.randomUUID();
+                    serializer.writeString(uuid.toString());
+                    serializer.writeString(username);
+                    ctx.writeAndFlush(serializer);
                     break;
                 default:
                     ctx.channel().close();
@@ -105,7 +129,7 @@ public class ConnectionHandler extends SimpleChannelInboundHandler<ByteBuf> {
         System.out.println("handshake {protocol: " + protocol + " state: "  + state + "}");
     }
 
-    private void status(ChannelHandlerContext ctx) {
+    private void sendStatus(ChannelHandlerContext ctx) {
 
         JSONObject json = new JSONObject();
         JSONObject versionJson = new JSONObject();
@@ -132,6 +156,23 @@ public class ConnectionHandler extends SimpleChannelInboundHandler<ByteBuf> {
         serializer1.writeVarInt(bytes.length);
         serializer1.writeBytes(bytes);
         ctx.writeAndFlush(serializer1.a);
+    }
+
+    public void sendEncryptRequest(ChannelHandlerContext ctx) {
+        PacketDataSerializer serializer1 = new PacketDataSerializer(ctx.alloc().buffer());
+        serializer1.writeVarInt(0x01);
+        serializer1.writeString("");
+        byte[] publickey = Server.getKeyPair().getPublic().getEncoded();
+        serializer1.writeVarInt(publickey.length);
+        serializer1.writeBytes(publickey);
+        serializer1.writeVarInt(5);
+        serializer1.writeBytes(verify);
+        ctx.writeAndFlush(serializer1);
+    }
+
+    public void encrypt() {
+        this.channel.pipeline().addAfter("timeout", "decrypt", new PacketDecryptor(MinecraftEncryption.a(2, secretKey)));
+        this.channel.pipeline().addAfter("timeout", "encrypt", new PacketEncryptor(MinecraftEncryption.a(1, secretKey)));
     }
 
     @Override

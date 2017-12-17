@@ -16,9 +16,14 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.timeout.ReadTimeoutHandler;
 
+import java.security.KeyPair;
+
 public class Server {
 
     public static Server instance;
+
+    private static KeyPair pair = MinecraftEncryption.generateKeyPair();
+
     private Properties properties = new Properties();
     private int port;
 
@@ -37,10 +42,10 @@ public class Server {
                         @Override
                         protected void initChannel(SocketChannel socketChannel) throws Exception {
                             socketChannel.pipeline()
-                                    .addLast(new ReadTimeoutHandler(20))
+                                    .addLast("timeout", new ReadTimeoutHandler(20))
                                     .addLast(new LegacyHandler(properties))
                                     .addLast(new FramingHandler())
-                                    .addLast(new ConnectionHandler(properties));
+                                    .addLast(new ConnectionHandler(properties, socketChannel));
                         }
                     })
                     .childOption(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT)
@@ -76,8 +81,16 @@ public class Server {
         e.printStackTrace();
     }
 
+    public static void error(String error) {
+        System.out.println("Error: " + error);
+    }
+
     public static boolean isDebuggingOn() {
         return instance.properties.isDebuggingOn();
+    }
+
+    public static KeyPair getKeyPair() {
+        return pair;
     }
 
 }
