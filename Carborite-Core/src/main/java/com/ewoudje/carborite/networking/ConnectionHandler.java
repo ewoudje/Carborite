@@ -2,9 +2,11 @@ package com.ewoudje.carborite.networking;
 
 //Made by ewoudje
 
-import com.ewoudje.carborite.MinecraftEncryption;
 import com.ewoudje.carborite.Properties;
 import com.ewoudje.carborite.Server;
+import com.ewoudje.carborite.networking.listeners.PacketPlayInListener;
+import com.ewoudje.carborite.networking.listeners.PacketPlayOutListener;
+import com.ewoudje.carborite.networking.packets.*;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
@@ -16,15 +18,23 @@ import org.json.JSONObject;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.security.PrivateKey;
-import java.util.Arrays;
-import java.util.Random;
-import java.util.UUID;
+import java.util.*;
 
 public class ConnectionHandler extends SimpleChannelInboundHandler<ByteBuf> {
 
-    private static Class<? extends PacketPlayIn>[] serverBoundPackages = new Class[] {
+    private static Class<? extends PacketPlayIn>[] playInPackages = new Class[256];
+    private static Class<? extends PacketPlayOut>[] playOutPackages = new Class[256];
+    private static Map<Class<? extends PacketPlayIn>, List<PacketPlayInListener>> playInListeners = new HashMap<>();
+    private static Map<Class<? extends PacketPlayOut>, List<PacketPlayOutListener>> playOutListeners = new HashMap<>();
 
-    };
+    static {
+        playInPackages[0x04] = ClientSettingsPacket.class;
+        playInPackages[0x13] = PlayerAbilities.class;
+
+        playOutPackages[0x23] = JoinGamePacket.class;
+        playOutPackages[0x46] = SpawnPositionPacket.class;
+        playOutPackages[0x2C] = PlayerAbilities.class;
+    }
 
     private Channel channel;
     private ProtocolState state = ProtocolState.HANDSHAKE;
@@ -63,7 +73,14 @@ public class ConnectionHandler extends SimpleChannelInboundHandler<ByteBuf> {
         final PacketDataSerializer msg = new PacketDataSerializer(buf);
         final int id = msg.readVarInt();
         if (state == ProtocolState.PLAY) {
-
+            PacketPlayIn packet = playInPackages[id].newInstance();
+            packet.read(msg);
+            List<PacketPlayInListener> listeners = playInListeners.get(packet.getClass());
+            if (listeners != null) {
+                for (PacketPlayInListener listener : listeners) {
+                    listener.onReceive(packet, this);
+                }
+            }
         } else if (state == ProtocolState.HANDSHAKE) {
             switch (id) {
                 case 0x00:
@@ -112,6 +129,7 @@ public class ConnectionHandler extends SimpleChannelInboundHandler<ByteBuf> {
                     serializer.writeString(uuid.toString());
                     serializer.writeString(username);
                     ctx.writeAndFlush(serializer);
+                    state = ProtocolState.PLAY;
                     break;
                 default:
                     ctx.channel().close();
@@ -155,7 +173,7 @@ public class ConnectionHandler extends SimpleChannelInboundHandler<ByteBuf> {
         byte[] bytes = json.toString().getBytes(StandardCharsets.UTF_8);
         serializer1.writeVarInt(bytes.length);
         serializer1.writeBytes(bytes);
-        ctx.writeAndFlush(serializer1.a);
+        ctx.writeAndFlush(serializer1.buf);
     }
 
     public void sendEncryptRequest(ChannelHandlerContext ctx) {
@@ -173,6 +191,22 @@ public class ConnectionHandler extends SimpleChannelInboundHandler<ByteBuf> {
     public void encrypt() {
         this.channel.pipeline().addAfter("timeout", "decrypt", new PacketDecryptor(MinecraftEncryption.a(2, secretKey)));
         this.channel.pipeline().addAfter("timeout", "encrypt", new PacketEncryptor(MinecraftEncryption.a(1, secretKey)));
+    }
+
+    public void sendPlayPacket(ChannelHandlerContext ctx, int id, PacketPlayOut packet) {
+        boolean cancel = false;
+        List<PacketPlayOutListener> listeners = playOutListeners.get(packet.getClass());
+        if (listeners != null) {
+            for (PacketPlayOutListener listener : listeners) {
+                if (listener.onSend(packet, this)) cancel = true;
+            }
+        }
+        if (!cancel) {
+            PacketDataSerializer serializer = new PacketDataSerializer(ctx.alloc().buffer());
+            serializer.writeVarInt(id);
+            packet.write(serializer);
+            ctx.writeAndFlush(serializer);
+        }
     }
 
     @Override

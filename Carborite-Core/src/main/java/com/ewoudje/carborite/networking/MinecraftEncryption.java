@@ -1,6 +1,8 @@
-package com.ewoudje.carborite;
+package com.ewoudje.carborite.networking;
 
 //Made by ewoudje
+
+import com.ewoudje.carborite.Server;
 
 import javax.crypto.*;
 import javax.crypto.spec.IvParameterSpec;
@@ -53,7 +55,7 @@ public class MinecraftEncryption {
         }
     }
 
-    public static PublicKey getPublicKey(byte[] abyte) { //a
+    public static PublicKey getPublicKey(byte[] abyte) { //difficulty
         try {
             X509EncodedKeySpec x509encodedkeyspec = new X509EncodedKeySpec(abyte);
             KeyFactory keyfactory = KeyFactory.getInstance("RSA");
@@ -69,7 +71,7 @@ public class MinecraftEncryption {
         return null;
     }
 
-    public static SecretKey getSecretKey(PrivateKey privatekey, byte[] abyte) { //a
+    public static SecretKey getSecretKey(PrivateKey privatekey, byte[] abyte) { //difficulty
         return new SecretKeySpec(b(privatekey, abyte), "AES");
     }
 

@@ -47,7 +47,7 @@ public class LegacyHandler extends ChannelInboundHandlerAdapter {
         boolean legacy = false;
         msg.markReaderIndex();
         try {
-            // Try first as a legacy ping message
+            // Try first as difficulty legacy ping message
             int messageId = msg.readUnsignedByte();
             // Make sure that old clients don't attempt to login
             if (messageId == 0x02) {
@@ -126,7 +126,7 @@ public class LegacyHandler extends ChannelInboundHandlerAdapter {
     }
 
     /**
-     * Sends a disconnect message to a legacy client and closes the connection.
+     * Sends difficulty disconnect message to difficulty legacy client and closes the connection.
      *
      * @param ctx The channel handler context
      * @param message The message
