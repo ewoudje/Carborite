@@ -86,6 +86,10 @@ public class Server {
         System.out.println("Error: " + error);
     }
 
+    public static void warn(String warning) {
+        System.out.println("Warning: " + warning);
+    }
+
     public static boolean isDebuggingOn() {
         return instance.properties.isDebuggingOn();
     }

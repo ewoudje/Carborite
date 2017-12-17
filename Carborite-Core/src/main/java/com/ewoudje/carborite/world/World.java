@@ -2,7 +2,10 @@ package com.ewoudje.carborite.world;
 
 //Made by ewoudje
 
-public abstract class World {
+import com.ewoudje.carborite.networking.listeners.PacketPlayInListener;
+import com.ewoudje.carborite.networking.packets.ClientSettingsPacket;
+
+public abstract class World implements PacketPlayInListener<ClientSettingsPacket> {
 
     public Gamemode getDefaultGamemode() {
         return Gamemode.SURVIVAL;
@@ -11,5 +14,4 @@ public abstract class World {
     public boolean isHardcore() {
         return false;
     }
-
 }
