@@ -4,6 +4,7 @@ package com.ewoudje.carborite.networking;
 
 import com.ewoudje.carborite.Properties;
 import com.ewoudje.carborite.Server;
+import com.ewoudje.carborite.management.PlayerList;
 import com.ewoudje.carborite.networking.listeners.PacketPlayInListener;
 import com.ewoudje.carborite.networking.listeners.PacketPlayOutListener;
 import com.ewoudje.carborite.networking.packets.*;
@@ -28,15 +29,22 @@ public class ConnectionHandler extends SimpleChannelInboundHandler<ByteBuf> {
     private static Map<Class<? extends PacketPlayOut>, List<PacketPlayOutListener>> playOutListeners = new HashMap<>();
 
     static {
+        playInPackages[0x00] = TeleportConfirmPacket.class;
         playInPackages[0x04] = ClientSettingsPacket.class;
-        playInPackages[0x13] = PlayerAbilities.class;
+        playInPackages[0x09] = PluginPacket.class;
+        playInPackages[0x13] = PlayerAbilitiesPacket.class;
+        playInPackages[0x0E] = PlayerPositionAndLookPacket.class;
 
         playOutPackages[0x23] = JoinGamePacket.class;
+        playOutPackages[0x18] = PluginPacket.class;
         playOutPackages[0x46] = SpawnPositionPacket.class;
-        playOutPackages[0x2C] = PlayerAbilities.class;
+        playOutPackages[0x2C] = PlayerAbilitiesPacket.class;
+        playOutPackages[0x3B] = HeldItemSlotPacket.class;
+        playOutPackages[0x1B] = EntityStatusPacket.class;
+        playOutPackages[0x2F] = PlayerPositionAndLookPacket.class;
     }
 
-    private Channel channel;
+    private PlaySubState subState = PlaySubState.JOINING;
     private ProtocolState state = ProtocolState.HANDSHAKE;
     private Properties properties;
     private int protocol;
@@ -45,12 +53,13 @@ public class ConnectionHandler extends SimpleChannelInboundHandler<ByteBuf> {
     private PrivateKey serverKey;
     private SecretKey secretKey;
     private byte[] verify;
-    private String username;
-    private UUID uuid;
+    private Channel channel;
 
-    public ConnectionHandler(Properties properties, Channel channel) {
+    public String username;
+    public UUID uuid;
+
+    public ConnectionHandler(Properties properties) {
         this.properties = properties;
-        this.channel = channel;
         Random random = new Random();
         verify = new byte[5];
         random.nextBytes(verify);
@@ -60,6 +69,7 @@ public class ConnectionHandler extends SimpleChannelInboundHandler<ByteBuf> {
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
         super.channelActive(ctx);
         System.out.println(ctx.channel().remoteAddress() + " connected to the server.");
+        channel = ctx.channel();
     }
 
     @Override
@@ -73,13 +83,19 @@ public class ConnectionHandler extends SimpleChannelInboundHandler<ByteBuf> {
         final PacketDataSerializer msg = new PacketDataSerializer(buf);
         final int id = msg.readVarInt();
         if (state == ProtocolState.PLAY) {
-            PacketPlayIn packet = playInPackages[id].newInstance();
-            packet.read(msg);
-            List<PacketPlayInListener> listeners = playInListeners.get(packet.getClass());
-            if (listeners != null) {
-                for (PacketPlayInListener listener : listeners) {
-                    listener.onReceive(packet, this);
+            final Class<? extends PacketPlayIn> pClass = playInPackages[id];
+            if (pClass != null) {
+                PacketPlayIn packet = pClass.newInstance();
+                packet.read(msg);
+                List<PacketPlayInListener> listeners = playInListeners.get(packet.getClass());
+                if (listeners != null) {
+                    for (PacketPlayInListener listener : listeners) {
+                        listener.onReceive(packet, this);
+                    }
                 }
+            } else {
+                ctx.channel().close();
+                throw new DecoderException("Unknown play message type: " + id);
             }
         } else if (state == ProtocolState.HANDSHAKE) {
             switch (id) {
@@ -111,7 +127,18 @@ public class ConnectionHandler extends SimpleChannelInboundHandler<ByteBuf> {
             switch (id) {
                 case 0x00:
                     username = msg.readString(16);
-                    sendEncryptRequest(ctx);
+                    if (properties.isOnline()) {
+                        sendEncryptRequest(ctx);
+                    } else {
+                        PacketDataSerializer serializer = new PacketDataSerializer(ctx.alloc().buffer());
+                        serializer.writeVarInt(0x02);
+                        uuid = UUID.fromString("d5443a7c-edf4-483b-ac3f-90206073452b");
+                        serializer.writeString("d5443a7c-edf4-483b-ac3f-90206073452b");
+                        serializer.writeString(username);
+                        ctx.writeAndFlush(serializer);
+                        state = ProtocolState.PLAY;
+                        PlayerList.players.initiatePlayer(this, username, uuid);
+                    }
                     break;
                 case 0x01:
                     PrivateKey privateKey = Server.getKeyPair().getPrivate();
@@ -123,13 +150,16 @@ public class ConnectionHandler extends SimpleChannelInboundHandler<ByteBuf> {
                         System.out.println("Wrong verify key, retrying...");
                         sendEncryptRequest(ctx);
                     }
-                    encrypt();
-                    PacketDataSerializer serializer = new PacketDataSerializer(ctx.alloc().buffer());
-                    uuid = UUID.randomUUID();
-                    serializer.writeString(uuid.toString());
-                    serializer.writeString(username);
-                    ctx.writeAndFlush(serializer);
+                    channel.pipeline().addAfter("timeout", "decrypt", new PacketDecryptor(MinecraftEncryption.a(2, secretKey)));
+                    channel.pipeline().addAfter("decrypt", "encrypt", new PacketEncryptor(MinecraftEncryption.a(1, secretKey)));
+                    PacketDataSerializer serializer3 = new PacketDataSerializer(ctx.alloc().buffer());
+                    serializer3.writeVarInt(0x02);
+                    uuid = UUID.fromString("d5443a7c-edf4-483b-ac3f-90206073452b");
+                    serializer3.writeString("d5443a7c-edf4-483b-ac3f-90206073452b");
+                    serializer3.writeString(username);
+                    ctx.writeAndFlush(serializer3);
                     state = ProtocolState.PLAY;
+                    PlayerList.players.initiatePlayer(this, username, uuid);
                     break;
                 default:
                     ctx.channel().close();
@@ -188,12 +218,7 @@ public class ConnectionHandler extends SimpleChannelInboundHandler<ByteBuf> {
         ctx.writeAndFlush(serializer1);
     }
 
-    public void encrypt() {
-        this.channel.pipeline().addAfter("timeout", "decrypt", new PacketDecryptor(MinecraftEncryption.a(2, secretKey)));
-        this.channel.pipeline().addAfter("timeout", "encrypt", new PacketEncryptor(MinecraftEncryption.a(1, secretKey)));
-    }
-
-    public void sendPlayPacket(ChannelHandlerContext ctx, int id, PacketPlayOut packet) {
+    public void sendPlayPacket(int id, PacketPlayOut packet) {
         boolean cancel = false;
         List<PacketPlayOutListener> listeners = playOutListeners.get(packet.getClass());
         if (listeners != null) {
@@ -202,11 +227,15 @@ public class ConnectionHandler extends SimpleChannelInboundHandler<ByteBuf> {
             }
         }
         if (!cancel) {
-            PacketDataSerializer serializer = new PacketDataSerializer(ctx.alloc().buffer());
+            PacketDataSerializer serializer = new PacketDataSerializer(channel.alloc().buffer());
             serializer.writeVarInt(id);
             packet.write(serializer);
-            ctx.writeAndFlush(serializer);
+            channel.writeAndFlush(serializer);
         }
+    }
+
+    public boolean isJoining() {
+        return subState == PlaySubState.JOINING;
     }
 
     @Override

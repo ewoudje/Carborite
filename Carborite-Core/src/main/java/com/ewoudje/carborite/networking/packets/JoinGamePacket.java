@@ -14,7 +14,7 @@ public class JoinGamePacket implements PacketPlayOut {
     private Dimension dimension;
     private Difficulty difficulty;
     private byte maxPlayers = (byte) 0xff;
-    private String world_type = "carborite";
+    private String world_type = "default";
     private boolean debug = true;
 
     public JoinGamePacket(int eID, Gamemode gamemode, Dimension dimension, Difficulty difficulty) {

@@ -11,20 +11,14 @@ import java.util.List;
 
 public class PacketDecryptor extends MessageToMessageDecoder<ByteBuf> {
 
-    private final Cipher cipher;
+    public final EncryptionTranslator translator;
 
     public PacketDecryptor(Cipher cipher) {
-        this.cipher = cipher;
+        this.translator = new EncryptionTranslator(cipher);
     }
 
     @Override
     protected void decode(ChannelHandlerContext ctx, ByteBuf byteBuf, List<Object> list) throws Exception {
-        int i = byteBuf.readableBytes();
-        byte[] abyte = new byte[i];
-        byteBuf.getBytes(i, abyte);
-        ByteBuf byteBuf1 = ctx.alloc().heapBuffer(this.cipher.getOutputSize(i));
-
-        byteBuf1.writeBytes(this.cipher.update(abyte, 0, i));
-        list.add(byteBuf1);
+        list.add(translator.decipher(ctx, byteBuf));
     }
 }

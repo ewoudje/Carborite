@@ -4,27 +4,40 @@ package com.ewoudje.carborite.networking;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.handler.codec.MessageToMessageEncoder;
+import io.netty.handler.codec.MessageToByteEncoder;
 
 import javax.crypto.Cipher;
-import java.util.List;
+import java.nio.charset.StandardCharsets;
 
-public class PacketEncryptor extends MessageToMessageEncoder<ByteBuf> {
+import static com.ewoudje.carborite.networking.FramingHandler.bytesToHex;
 
-    private Cipher cipher;
+public class PacketEncryptor extends MessageToByteEncoder<ByteBuf> {
 
-    public PacketEncryptor(Cipher chiper) {
-        this.cipher = cipher;
+    public final EncryptionTranslator translator;
+
+    public PacketEncryptor(Cipher cipher) {
+        this.translator = new EncryptionTranslator(cipher);
     }
 
     @Override
-    protected void encode(ChannelHandlerContext ctx, ByteBuf byteBuf, List<Object> output) throws Exception {
-        int size = byteBuf.readableBytes();
-        byte[] bytes = new byte[size];
-        byteBuf.getBytes(size, bytes);
-        byte[] encrypted = cipher.update(bytes);
-        ByteBuf result = ctx.alloc().buffer(size);
-        result.writeBytes(encrypted);
-        output.add(result);
+    protected void encode(ChannelHandlerContext ctx, ByteBuf byteBuf, ByteBuf output) throws Exception {
+        try {
+            translator.cipher(byteBuf, output);
+            output.markReaderIndex();
+            String utf8 = output.toString(StandardCharsets.UTF_8);
+            byte[] bytes = utf8.getBytes(StandardCharsets.UTF_8);
+            System.out.println("encrypted {length: " + bytes.length + " data: " + bytesToHex(bytes) + "\n utf-8: " + utf8.replace("\n", "\\n") + "}");
+            output.resetReaderIndex();
+            ByteBuf test = translator.decipher(ctx, byteBuf);
+            int size = test.readableBytes();
+            bytes = new byte[size];
+            test.getBytes(size, bytes);
+            System.out.println("decrypted {length: " + bytes.length + " data: " + bytesToHex(bytes) + "}");
+            output.resetReaderIndex();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
     }
+
 }

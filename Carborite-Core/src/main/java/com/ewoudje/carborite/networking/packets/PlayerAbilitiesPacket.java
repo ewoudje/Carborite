@@ -4,17 +4,17 @@ package com.ewoudje.carborite.networking.packets;
 
 import com.ewoudje.carborite.networking.PacketDataSerializer;
 
-public class PlayerAbilities implements PacketPlayOut, PacketPlayIn {
+public class PlayerAbilitiesPacket implements PacketPlayOut, PacketPlayIn {
 
     private byte flags;
     private float flyingSpeed;
     private float fovModfier;
 
-    public PlayerAbilities() {
+    public PlayerAbilitiesPacket() {
 
     }
 
-    public PlayerAbilities(byte flags, float flyingSpeed, float fovModfier) {
+    public PlayerAbilitiesPacket(byte flags, float flyingSpeed, float fovModfier) {
         this.flags = flags;
         this.flyingSpeed = flyingSpeed;
         this.fovModfier = fovModfier;

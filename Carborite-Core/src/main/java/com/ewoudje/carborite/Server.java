@@ -44,9 +44,9 @@ public class Server {
                         protected void initChannel(SocketChannel socketChannel) throws Exception {
                             socketChannel.pipeline()
                                     .addLast("timeout", new ReadTimeoutHandler(20))
-                                    .addLast(new LegacyHandler(properties))
-                                    .addLast(new FramingHandler())
-                                    .addLast(new ConnectionHandler(properties, socketChannel));
+                                    .addLast("legacy", new LegacyHandler(properties))
+                                    .addLast("framing",new FramingHandler())
+                                    .addLast("handle", new ConnectionHandler(properties));
                         }
                     })
                     .childOption(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT)
@@ -92,6 +92,10 @@ public class Server {
 
     public static boolean isDebuggingOn() {
         return instance.properties.isDebuggingOn();
+    }
+
+    public static boolean isOnline() {
+        return instance.properties.isOnline();
     }
 
     public static KeyPair getKeyPair() {

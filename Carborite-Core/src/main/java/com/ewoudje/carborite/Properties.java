@@ -27,6 +27,7 @@ public class Properties {
     private String serverType = "carborite";
     private int protocol = 340;
     private int maxPlayers = 20;
+    private boolean isOnline = true;
 
     private String faviconData;
 
@@ -107,6 +108,10 @@ public class Properties {
 
     public boolean isDebuggingOn() {
         return true;
+    }
+
+    public boolean isOnline() {
+        return isOnline;
     }
 
 }
