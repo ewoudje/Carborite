@@ -4,9 +4,9 @@ package com.ewoudje.carborite.entitys;
 
 import com.ewoudje.carborite.networking.ConnectionHandler;
 import com.ewoudje.carborite.networking.listeners.PacketPlayInListener;
-import com.ewoudje.carborite.networking.packets.PacketPlayIn;
 import com.ewoudje.carborite.networking.packets.PlayerPositionAndLookPacket;
 import com.ewoudje.carborite.networking.packets.TeleportConfirmPacket;
+import com.ewoudje.carborite.world.CRWorld;
 import org.bukkit.*;
 import org.bukkit.advancement.Advancement;
 import org.bukkit.advancement.AdvancementProgress;
@@ -40,10 +40,41 @@ import java.util.*;
 public class CRPlayer extends Entity implements Player {
 
     private ConnectionHandler connection;
-    private boolean sneaking;
+    private boolean sneaking = false;
     private Map<Integer, Location> teleports = new HashMap<>();
-    private Location location = new Location(null, 0, 0, 0);
-    private Random random = new Random();
+    private Location location = new Location(CRWorld.defaultWorld, 0, 0, 0);
+    private Random random;
+
+    static {
+        PacketPlayInListener listener = (packet, handler) -> {
+            if (packet instanceof TeleportConfirmPacket) {
+                TeleportConfirmPacket packet2 = (TeleportConfirmPacket) packet;
+                Location teleportLoc = handler.getPlayer().teleports.get(packet2.getId());
+                if (teleportLoc != null) {
+                    handler.getPlayer().unsafeTeleport(teleportLoc);
+                }
+            } else if (packet instanceof PlayerPositionAndLookPacket) {
+                PlayerPositionAndLookPacket packet2 = (PlayerPositionAndLookPacket) packet;
+                Location newLoc = packet2.getLocation();
+                Location oldLoc = handler.getPlayer().location;
+                if (oldLoc.distance(newLoc) > 2) {
+                    //TODO Kick player for moving to fast
+                    int id = handler.getPlayer().random.nextInt();
+                    handler.getPlayer().teleports.put(id, oldLoc);
+                    handler.sendPlayPacket(0x2F, new PlayerPositionAndLookPacket(oldLoc, (byte) 0x00, id));
+                }
+                handler.getPlayer().location = newLoc;
+                handler.getPlayer().updatePlayerPosition();
+            }
+        };
+        ConnectionHandler.registerPlayInListener(TeleportConfirmPacket.class, listener);
+        ConnectionHandler.registerPlayInListener(PlayerPositionAndLookPacket.class, listener);
+    }
+
+    public CRPlayer(ConnectionHandler connection, Random random) {
+        this.connection = connection;
+        this.random = random;
+    }
 
     @Override
     public String getDisplayName() {
@@ -737,7 +768,7 @@ public class CRPlayer extends Entity implements Player {
 
     @Override
     public String getName() {
-        return null;
+        return connection.username;
     }
 
     @Override
@@ -1530,6 +1561,10 @@ public class CRPlayer extends Entity implements Player {
         return null;
     }
 
+    public void addTeleport(int id, Location location) {
+        teleports.put(id, location);
+    }
+
     private void unsafeTeleport(Location location) {
         /*for (CRPlayer player : PlayerList.players.list) {
             if (player.canSee(this)) player.connection.sendPlayPacket();
@@ -1537,33 +1572,6 @@ public class CRPlayer extends Entity implements Player {
     }
 
     private void updatePlayerPosition() {
-
-    }
-
-    private class PlayerPacketListener implements PacketPlayInListener {
-
-        @Override
-        public void onReceive(PacketPlayIn packet, ConnectionHandler handler) {
-            if (packet instanceof TeleportConfirmPacket) {
-                TeleportConfirmPacket packet2 = (TeleportConfirmPacket) packet;
-                Location teleportLoc = teleports.get(packet2.getId());
-                if (teleportLoc != null) {
-                    unsafeTeleport(teleportLoc);
-                }
-            } else if (packet instanceof PlayerPositionAndLookPacket) {
-                PlayerPositionAndLookPacket packet2 = (PlayerPositionAndLookPacket) packet;
-                Location newLoc = packet2.getLocation();
-                if (location.distance(newLoc) > 2) {
-                    //TODO Kick player for moving to fast
-                    int id = random.nextInt();
-                    teleports.put(id, location);
-                    handler.sendPlayPacket(0x2F, new PlayerPositionAndLookPacket(location, (byte) 0x00, id));
-                }
-                location = newLoc;
-                updatePlayerPosition();
-            }
-        }
-
 
     }
 }
