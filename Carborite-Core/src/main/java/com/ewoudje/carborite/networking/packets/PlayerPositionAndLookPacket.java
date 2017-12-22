@@ -3,6 +3,7 @@ package com.ewoudje.carborite.networking.packets;
 //Made by ewoudje
 
 import com.ewoudje.carborite.networking.PacketDataSerializer;
+import com.ewoudje.carborite.world.CRWorld;
 import org.bukkit.Location;
 
 public class PlayerPositionAndLookPacket implements PacketPlayOut, PacketPlayIn {
@@ -11,6 +12,9 @@ public class PlayerPositionAndLookPacket implements PacketPlayOut, PacketPlayIn 
     private float yaw, pitch;
     private byte flags;
     private int teleportID;
+    private boolean onGround;
+
+    public PlayerPositionAndLookPacket() {}
 
     public PlayerPositionAndLookPacket(double x, double y, double z, float yaw, float pitch, byte flags, int teleportID) {
         this.x = x;
@@ -50,19 +54,14 @@ public class PlayerPositionAndLookPacket implements PacketPlayOut, PacketPlayIn 
         z = serializer.readDouble();
         yaw = serializer.readFloat();
         pitch = serializer.readFloat();
-        flags = serializer.readByte();
-        teleportID = serializer.readVarInt();
+        onGround = serializer.readBoolean();
     }
 
     public Location getLocation() {
-        return new Location(null, x, y, z, yaw, pitch);
+        return new Location(CRWorld.defaultWorld, x, y, z, yaw, pitch);
     }
 
-    public byte getFlags() {
-        return flags;
-    }
-
-    public int getTeleportID() {
-        return teleportID;
+    public boolean isOnGround() {
+        return onGround;
     }
 }

@@ -4,9 +4,11 @@ package com.ewoudje.carborite.networking.packets;
 
 import com.ewoudje.carborite.networking.PacketDataSerializer;
 
-public class HeldItemSlotPacket implements PacketPlayOut {
+public class HeldItemSlotPacket implements PacketPlayOut, PacketPlayIn {
 
     int i;
+
+    public HeldItemSlotPacket() {}
 
     public HeldItemSlotPacket(int i) {
         this.i = i;
@@ -15,5 +17,14 @@ public class HeldItemSlotPacket implements PacketPlayOut {
     @Override
     public void write(PacketDataSerializer serializer) {
         serializer.writeByte(i);
+    }
+
+    @Override
+    public void read(PacketDataSerializer serializer) {
+        i = serializer.readByte();
+    }
+
+    public int getSlot() {
+        return i;
     }
 }

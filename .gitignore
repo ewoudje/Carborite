@@ -27,3 +27,7 @@ hs_err_pid*
 .idea/
 *.iml
 */target/
+.settings/
+.project
+dependency-reduced-pom.xml
+.classpath

@@ -4,10 +4,12 @@ package com.ewoudje.carborite.networking;
 
 import com.ewoudje.carborite.Properties;
 import com.ewoudje.carborite.Server;
+import com.ewoudje.carborite.entitys.CRPlayer;
 import com.ewoudje.carborite.management.PlayerList;
 import com.ewoudje.carborite.networking.listeners.PacketPlayInListener;
 import com.ewoudje.carborite.networking.listeners.PacketPlayOutListener;
 import com.ewoudje.carborite.networking.packets.*;
+import com.google.common.collect.Lists;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
@@ -32,11 +34,12 @@ public class ConnectionHandler extends SimpleChannelInboundHandler<ByteBuf> {
         playInPackages[0x00] = TeleportConfirmPacket.class;
         playInPackages[0x04] = ClientSettingsPacket.class;
         playInPackages[0x09] = PluginPacket.class;
-        playInPackages[0x13] = PlayerAbilitiesPacket.class;
         playInPackages[0x0E] = PlayerPositionAndLookPacket.class;
+        playInPackages[0x13] = PlayerAbilitiesPacket.class;
+        playInPackages[0x1A] = HeldItemSlotPacket.class;
 
-        playOutPackages[0x23] = JoinGamePacket.class;
         playOutPackages[0x18] = PluginPacket.class;
+        playOutPackages[0x23] = JoinGamePacket.class;
         playOutPackages[0x46] = SpawnPositionPacket.class;
         playOutPackages[0x2C] = PlayerAbilitiesPacket.class;
         playOutPackages[0x3B] = HeldItemSlotPacket.class;
@@ -44,7 +47,26 @@ public class ConnectionHandler extends SimpleChannelInboundHandler<ByteBuf> {
         playOutPackages[0x2F] = PlayerPositionAndLookPacket.class;
     }
 
-    private PlaySubState subState = PlaySubState.JOINING;
+    public static void registerPlayInListener(Class<? extends PacketPlayIn> clazz, PacketPlayInListener listener) {
+        List<PacketPlayInListener> list = playInListeners.get(clazz);
+        if (list != null) {
+            list.add(listener);
+            playInListeners.replace(clazz, list);
+        } else {
+            playInListeners.put(clazz, Lists.newArrayList(listener));
+        }
+    }
+
+    public static void registerPlayOutListener(Class<? extends PacketPlayOut> clazz, PacketPlayOutListener listener) {
+        List<PacketPlayOutListener> list = playOutListeners.get(clazz);
+        if (list != null) {
+            list.add(listener);
+            playOutListeners.replace(clazz, list);
+        } else {
+            playOutListeners.put(clazz, Lists.newArrayList(listener));
+        }
+    }
+
     private ProtocolState state = ProtocolState.HANDSHAKE;
     private Properties properties;
     private int protocol;
@@ -234,8 +256,8 @@ public class ConnectionHandler extends SimpleChannelInboundHandler<ByteBuf> {
         }
     }
 
-    public boolean isJoining() {
-        return subState == PlaySubState.JOINING;
+    public CRPlayer getPlayer() {
+        return PlayerList.players.getOnlinePlayer(username);
     }
 
     @Override

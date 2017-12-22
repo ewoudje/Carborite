@@ -2,6 +2,7 @@ package com.ewoudje.carborite;
 
 //Made by ewoudje
 
+import com.ewoudje.carborite.world.Gamemode;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufOutputStream;
 import io.netty.buffer.Unpooled;
@@ -27,30 +28,36 @@ public class Properties {
     private String serverType = "carborite";
     private int protocol = 340;
     private int maxPlayers = 20;
-    private boolean isOnline = true;
+    private boolean isOnline = false;
 
     private String faviconData;
 
     public void loadFavicon(Path directory) throws IOException {
+
         if (this.favicon.isEmpty()) {
             return;
         }
+
         final Path faviconPath = directory.resolve(this.favicon);
         if (!Files.exists(faviconPath)) {
             throw new IOException("Favicon file does not exist.");
         }
+
         final BufferedImage image;
         try {
             image = ImageIO.read(faviconPath.toFile());
         } catch (IOException e) {
             throw new IOException("Unable to read the favicon file.");
         }
+
         if (image.getWidth() != 64) {
             throw new IOException("Favicon must be 64 pixels wide.");
         }
+
         if (image.getHeight() != 64) {
             throw new IOException("Favicon must be 64 pixels high.");
         }
+        
         final ByteBuf buf = Unpooled.buffer();
         try {
             ImageIO.write(image, "PNG", new ByteBufOutputStream(buf));
@@ -112,6 +119,14 @@ public class Properties {
 
     public boolean isOnline() {
         return isOnline;
+    }
+
+    public Gamemode getDefaultGamemode() {
+        return Gamemode.SURVIVAL;
+    }
+
+    public boolean isHardcore() {
+        return false;
     }
 
 }
